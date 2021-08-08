@@ -13,6 +13,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late TextEditingController controller;
   late DateTime? newTaskDate;
+  bool showCompleted = false;
 
   @override
   void initState() {
@@ -22,15 +23,17 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final database = Provider.of<AppDatabase>(context);
+    final dao = Provider.of<TaskDao>(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text('Tasks')),
+      appBar: AppBar(title: Text('Tasks'), actions: [
+        Row(children: [Text('Completed'), Switch(value: showCompleted, onChanged: (newValue) => setState(() => showCompleted = newValue))])
+      ]),
       body: Column(
         children: [
           Expanded(
             child: StreamBuilder(
-              stream: database.watchAllTasks(),
+              stream: showCompleted ? dao.watchCompletedTasks() : dao.watchAllTasks(),
               builder: (context, AsyncSnapshot<List<Task>> snapshot) {
                 final tasks = snapshot.data ?? <Task>[];
 
@@ -42,13 +45,13 @@ class _HomePageState extends State<HomePage> {
                     return Slidable(
                       actionPane: SlidableDrawerActionPane(),
                       secondaryActions: [
-                        IconSlideAction(caption: 'Delete', color: Colors.red, icon: Icons.delete, onTap: () => database.deleteTask(task))
+                        IconSlideAction(caption: 'Delete', color: Colors.red, icon: Icons.delete, onTap: () => dao.deleteTask(task))
                       ],
                       child: CheckboxListTile(
                         title: Text(task.name),
                         subtitle: Text(task.dueDate?.toString() ?? 'No date'),
                         value: task.completed,
-                        onChanged: (newValue) => database.updateTask(task.copyWith(completed: newValue)),
+                        onChanged: (newValue) => dao.updateTask(task.copyWith(completed: newValue)),
                       ),
                     );
                   },
@@ -66,8 +69,8 @@ class _HomePageState extends State<HomePage> {
                     controller: controller,
                     decoration: InputDecoration(hintText: 'Task Name'),
                     onSubmitted: (inputName) {
-                      final task = Task(name: inputName, dueDate: newTaskDate, completed: false, id: 1);
-                      database.insertTask(task);
+                      final task = Task(name: inputName, dueDate: newTaskDate, completed: false, id: 2);
+                      dao.insertTask(task);
 
                       _resetValuesAfterSubmit();
                     },

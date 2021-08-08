@@ -21,7 +21,7 @@ class Tasks extends Table {
   BoolColumn? get completed => boolean().withDefault(Constant(false))();
 }
 
-@UseMoor(tables: [Tasks])
+@UseMoor(tables: [Tasks], daos: [TaskDao])
 // _$AppDatabase is the name of the generated class
 class AppDatabase extends _$AppDatabase {
   // Specify the location of the database file
@@ -30,17 +30,48 @@ class AppDatabase extends _$AppDatabase {
   /// Bump this when changing tables and columns.
   /// Migrations will be covered in the next part.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+}
 
-  // All tables have getters in the generated class - we can select the tasks table
+@UseDao(tables: [Tasks])
+class TaskDao extends DatabaseAccessor<AppDatabase> with _$TaskDaoMixin {
+  final AppDatabase appDb;
+
+  TaskDao(this.appDb) : super(appDb);
+
   Future<List<Task>> getAllTasks() => select(tasks).get();
 
-  // Moor supports Streams which emit elements when the watched data changes
-  Stream<List<Task>> watchAllTasks() => select(tasks).watch();
+  // Updated to use the orderBy statement
+  Stream<List<Task>> watchAllTasks() {
+    // Wrap the whole select statement with parenthesis
+    return (select(tasks)
+          // Statements like orderBy and where return void => the need to use a cascading ".." operator
+          ..orderBy(([
+            // Primary sorting by due date
+            (t) => OrderingTerm(expression: t.dueDate, mode: OrderingMode.desc),
+            // Secondary sorting by alphabet
+            (t) => OrderingTerm(expression: t.name),
+          ])))
+        .watch();
+  }
+
+  Stream<List<Task>> watchCompletedTasks() {
+    // where returns void, need to use the cascading operator
+    return (select(tasks)
+          ..orderBy(
+            ([
+              // Primary sorting by due date
+              (t) => OrderingTerm(expression: t.dueDate, mode: OrderingMode.desc),
+              // Secondary alphabetical sorting
+              (t) => OrderingTerm(expression: t.name),
+            ]),
+          )
+          ..where((t) => t.completed.equals(true)))
+        .watch();
+  }
 
   Future insertTask(Task task) => into(tasks).insert(task);
 
-  // Updates a Task with a matching primary key
   Future updateTask(Task task) => update(tasks).replace(task);
 
   Future deleteTask(Task task) => delete(tasks).delete(task);
